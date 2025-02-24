@@ -3,6 +3,8 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/super-wallet (1).iml" filepath="$PROJECT_DIR$/.idea/super-wallet (1).iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/super-wallet.main.iml" filepath="$PROJECT_DIR$/.idea/modules/super-wallet.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/super-wallet.test.iml" filepath="$PROJECT_DIR$/.idea/modules/super-wallet.test.iml" />
     </modules>
   </component>
 </project>

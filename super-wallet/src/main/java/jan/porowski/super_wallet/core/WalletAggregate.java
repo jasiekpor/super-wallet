@@ -1,27 +1,22 @@
 package jan.porowski.super_wallet.core;
 
-import jan.porowski.super_wallet.core.exceptions.WalletException;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.Value;
-
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 import static jan.porowski.super_wallet.core.WalletEvent.*;
+import static jan.porowski.super_wallet.core.exceptions.WalletException.*;
 
-@Value
-@AllArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PRIVATE, force = true)
-public class WalletAggregate {
+public record WalletAggregate(
+        UUID id,
+        Map<String, BigDecimal> balances,
+        Map<UUID, Token> blockedAmounts,
+        long version,
+        Instant updateTime
+) {
 
-    UUID id;
-    Map<String, BigDecimal> balances;
-    Map<UUID, Token> blockedAmounts;
-    long version;
 
     public WalletAggregate apply(WalletEvent event) {
         return switch (event) {
@@ -34,15 +29,15 @@ public class WalletAggregate {
         };
     }
 
-    static WalletAggregate empty() {
-        return new WalletAggregate();
+    public static WalletAggregate empty() {
+        return new WalletAggregate(null, null, null, 0, Instant.EPOCH);
     }
 
     private WalletAggregate applyWalletCreated(WalletCreated event) {
-        if (id != null) {
-            throw new WalletException("Wallet already exists", event);
+        if (id != null || version != 0) {
+            throw new WalletAlreadyExistsException(event);
         }
-        return new WalletAggregate(event.walletId(), Map.of(), Map.of(), version + 1);
+        return new WalletAggregate(event.walletId(), Map.of(), Map.of(), version + 1, event.time());
     }
 
     private WalletAggregate applyFundsAdded(FundsAdded event) {
@@ -55,11 +50,15 @@ public class WalletAggregate {
 
         newBalances.put(symbol, newAmount);
 
-        return new WalletAggregate(id, newBalances, blockedAmounts, version + 1);
+        return new WalletAggregate(id, newBalances, blockedAmounts, version + 1, event.time());
     }
 
     private WalletAggregate applyFundsBlocked(FundsBlocked event) {
         validateWalletCreated(event);
+
+        if (blockedAmounts.containsKey(event.blockId())) {
+            throw new BlockAlreadyExistsException(event);
+        }
 
         Map<UUID, Token> newBlocked = new HashMap<>(blockedAmounts);
         String symbol = event.token().symbol();
@@ -67,12 +66,12 @@ public class WalletAggregate {
         BigDecimal newAmount = currentAmount.subtract(event.token().amount());
 
         if (newAmount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new WalletException("Insufficient funds", event);
+            throw new InsufficientFundsException(event);
         }
 
         newBlocked.put(event.blockId(), event.token());
 
-        return new WalletAggregate(id, balances, newBlocked, version + 1);
+        return new WalletAggregate(id, balances, newBlocked, version + 1, event.time());
     }
 
     private WalletAggregate applyFundsReleased(FundsReleased event) {
@@ -82,12 +81,12 @@ public class WalletAggregate {
         Token blockedAmount = newBlocked.get(event.blockId());
 
         if (blockedAmount == null) {
-            throw new WalletException("Blocked amount not found", event);
+            throw new BlockNotFoundException(event);
         }
 
         newBlocked.remove(event.blockId());
 
-        return new WalletAggregate(id, balances, newBlocked, version + 1);
+        return new WalletAggregate(id, balances, newBlocked, version + 1, event.time());
     }
 
     private WalletAggregate applyFundsWithdrawn(FundsWithdrawn event) {
@@ -98,7 +97,7 @@ public class WalletAggregate {
         Token blockedAmount = newBlocked.get(event.blockId());
 
         if (blockedAmount == null) {
-            throw new WalletException("Blocked amount not found", event);
+            throw new BlockNotFoundException(event);
         }
 
         BigDecimal newAmount = newBalances.get(blockedAmount.symbol()).subtract(blockedAmount.amount());
@@ -106,7 +105,7 @@ public class WalletAggregate {
 
         newBlocked.remove(event.blockId());
 
-        return new WalletAggregate(id, newBalances, newBlocked, version + 1);
+        return new WalletAggregate(id, newBalances, newBlocked, version + 1, event.time());
     }
 
     public BigDecimal availableBalance(String symbol) {
@@ -118,9 +117,9 @@ public class WalletAggregate {
         return balance.subtract(blockedBalance);
     }
 
-    private void validateWalletCreated(WalletEvent event){
+    private void validateWalletCreated(WalletEvent event) {
         if (id == null || balances == null || blockedAmounts == null) {
-            throw new WalletException("Wallet not yet created", event);
+            throw new WalletNotCreatedException(event);
         }
     }
 }

@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: super-wallet
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: wallet-group
+      key-deserializer: org.apache.kafka.common.serialization.UUIDDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: latest
+      heartbeat-interval: 3000
+      properties:
+        session.timeout.ms: 10000
+        heartbeat.interval.ms: 3000
+        max.poll.interval.ms: 30000
+        max.partition.fetch.bytes: 1048576
+      isolation-level: read_committed
+    producer:
+      acks: all
+      batch-size: 1638400
+      retries: 5
+      key-serializer: org.apache.kafka.common.serialization.UUIDSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+        linger.ms: 5
+        request.timeout.ms: 60000
+      compression-type: snappy
+      transaction-id-prefix: tx-
+    listener:
+      ack-mode: record
+      poll-timeout: 150
+  main:
+    web-application-type: reactive
+    allow-bean-definition-overriding: true
+  profiles:
+    default: dev
+
+kafka:
+  topics:
+    consumer:
+      commands: wallet-commands
+    producers:
+      events: wallet-events
+      snapshots: wallet-snapshots
